@@ -1,0 +1,104 @@
+{
+  "operation_types": {
+    "SELECT": {
+      "tool": "mysql_select",
+      "description": "SELECT operations retrieve data from the database and return results in a structured format.",
+      "examples": [
+        {
+          "description": "Simple WHERE clause with a single parameter",
+          "query": "SELECT * FROM users WHERE age > %s",
+          "params": [25],
+          "explanation": "This will return all users with age greater than 25"
+        },
+        {
+          "description": "Multiple parameters in WHERE clause",
+          "query": "SELECT * FROM products WHERE price BETWEEN %s AND %s AND category = %s",
+          "params": [10.99, 49.99, "electronics"],
+          "explanation": "This will return all electronics products with price between 10.99 and 49.99"
+        },
+        {
+          "description": "JOIN with parameters",
+          "query": "SELECT o.order_id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id WHERE o.status = %s",
+          "params": ["shipped"],
+          "explanation": "This will return order IDs and customer names for all shipped orders"
+        },
+        {
+          "description": "IN operation with multiple parameters (explicit placeholders)",
+          "query": "SELECT * FROM users WHERE email IN (%s, %s, %s)",
+          "params": ["user1@example.com", "user2@example.com", "user3@example.com"],
+          "explanation": "This will return all users whose email is in the specified list. One approach is to have one %s placeholder for each item in the list."
+        },
+        {
+          "description": "IN operation with a list parameter (automatic expansion)",
+          "query": "SELECT * FROM users WHERE email IN (%s)",
+          "params": [["user1@example.com", "user2@example.com", "user3@example.com"]],
+          "explanation": "This is a simpler approach that automatically expands the list parameter. The server will convert this to the proper SQL with the right number of placeholders."
+        }
+      ]
+    },
+    "INSERT": {
+      "tool": "mysql_insert",
+      "description": "INSERT operations add new data to the database and return the number of affected rows.",
+      "enabled_by_default": false,
+      "examples": [
+        {
+          "description": "Simple INSERT with parameters",
+          "query": "INSERT INTO customers (name, email, created_at) VALUES (%s, %s, %s)",
+          "params": ["John Doe", "john@example.com", "2023-05-20"],
+          "explanation": "This will insert a new customer with the provided values"
+        },
+        {
+          "description": "Multiple row INSERT",
+          "query": "INSERT INTO products (name, price, category) VALUES (%s, %s, %s), (%s, %s, %s)",
+          "params": ["Product A", 12.99, "books", "Product B", 24.99, "electronics"],
+          "explanation": "This will insert two products with different values"
+        }
+      ]
+    },
+    "UPDATE": {
+      "tool": "mysql_update",
+      "description": "UPDATE operations modify existing data in the database and return the number of affected rows.",
+      "enabled_by_default": false,
+      "examples": [
+        {
+          "description": "Simple UPDATE with parameters",
+          "query": "UPDATE orders SET status = %s WHERE order_id = %s",
+          "params": ["shipped", "ORD-12345"],
+          "explanation": "This will update the status of order ORD-12345 to 'shipped'"
+        },
+        {
+          "description": "UPDATE with multiple conditions",
+          "query": "UPDATE products SET price = price * %s WHERE category = %s AND price < %s",
+          "params": [0.9, "clothing", 50],
+          "explanation": "This will apply a 10% discount to all clothing products priced under $50"
+        }
+      ]
+    },
+    "DELETE": {
+      "tool": "mysql_delete",
+      "description": "DELETE operations remove data from the database and return the number of affected rows.",
+      "enabled_by_default": false,
+      "examples": [
+        {
+          "description": "Simple DELETE with parameters",
+          "query": "DELETE FROM cart_items WHERE user_id = %s AND created_at < %s",
+          "params": [123, "2023-05-01"],
+          "explanation": "This will remove all cart items for user 123 created before May 1, 2023"
+        },
+        {
+          "description": "DELETE with JOIN condition",
+          "query": "DELETE FROM orders WHERE customer_id IN (SELECT id FROM customers WHERE email = %s)",
+          "params": ["john@example.com"],
+          "explanation": "This will delete all orders placed by the customer with the specified email"
+        }
+      ]
+    }
+  },
+  "usage_notes": [
+    "Always use %s as the placeholder in MySQL queries, regardless of the data type",
+    "The mysql-connector library will handle the proper escaping and formatting",
+    "INSERT, UPDATE, and DELETE operations are disabled by default for safety",
+    "Use the specific tool for each operation type (mysql_select, mysql_insert, etc.)",
+    "Each tool validates that the SQL statement matches the expected operation type"
+  ]
+}

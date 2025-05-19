@@ -1,4 +1,4 @@
-# MySQL MCP Server for Claude Desktop
+# MySQL MCP Server Python Implementation
 
 <div align="center">
 
@@ -27,34 +27,11 @@ This project provides a Message Connectivity Protocol (MCP) server that connects
 - MySQL database credentials (host, port, database name, username, password)
 - [Claude Desktop](https://www.anthropic.com/claude/download) or any Claude interface supporting MCP
 
-## 🚀 Quick Setup (Recommended)
+## 🚀 Development Setup
 
-The easiest way to set up is using our provided setup script:
+Follow these steps to get the MySQL MCP server running for development:
 
-```bash
-# Make scripts executable
-chmod +x setup.sh run.sh
-
-# Run the setup script
-./setup.sh
-```
-
-This script will:
-1. Build the Docker image
-2. Provide detailed instructions for configuring Claude Desktop
-
-## 🛠️ Manual Setup
-
-### 1. Save all project files
-
-Make sure you have all these files in your directory:
-- `server.py` - The main MCP server using FastMCP
-- `Dockerfile` - For building the Docker image 
-- `requirements.txt` - Python dependencies
-- `run.sh` - Helper script to run the server
-- `setup.sh` - Complete setup script
-
-### 2. Install dependencies (optional for local development)
+### 1. Install dependencies for local development
 
 ```bash
 # Create a virtual environment
@@ -63,27 +40,58 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install the MCP SDK
+pip install mcp
 ```
 
-### 3. Build the Docker image
+### 2. Configure database connection
+
+Create a `.env` file in the project root directory. You can copy the provided example:
+
+```bash
+cp .env.example .env
+```
+
+Then edit the `.env` file with your database details:
+
+```
+# MySQL Connection Settings
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DB=your_database
+MYSQL_USER=your_username
+MYSQL_PASSWORD=your_password
+
+# Operation Controls (true/false)
+MYSQL_ENABLE_SELECT=true
+MYSQL_ENABLE_INSERT=false
+MYSQL_ENABLE_UPDATE=false
+MYSQL_ENABLE_DELETE=false
+```
+
+### 3. Run the MCP Inspector for development
+
+```bash
+# Run the server with the MCP Inspector
+mcp dev server.py
+```
+
+This will start:
+- The MySQL MCP server in development mode
+- The MCP Inspector web interface (default: http://127.0.0.1:6274)
+- A proxy server that connects the two
+
+The MCP Inspector provides a web-based interface to test your MCP server. You can:
+- Browse available tools and resources
+- Execute tool calls and see their responses
+- Test full conversations with simulated LLM responses
+- Debug issues with your server implementation
+
+### 4. Build the Docker image (for production deployment)
 
 ```bash
 docker build -t mysql-mcp-server .
-```
-
-### 4. Test the server
-
-Set your database connection details as environment variables:
-
-```bash
-export MYSQL_HOST="your_mysql_host"
-export MYSQL_PORT="3306"  # Default MySQL port
-export MYSQL_DB="your_database"
-export MYSQL_USER="your_username"
-export MYSQL_PASSWORD="your_password"
-
-# Run the server
-./run.sh
 ```
 
 ### 5. Configure Claude Desktop
@@ -105,11 +113,7 @@ Add the MCP server configuration:
         "run",
         "--rm",
         "-i",
-        "-e", "MYSQL_HOST=localhost",
-        "-e", "MYSQL_PORT=3306",
-        "-e", "MYSQL_DB=mysql",
-        "-e", "MYSQL_USER=root",
-        "-e", "MYSQL_PASSWORD=password",
+        "--env-file", "/path/to/your/.env",
         "mysql-mcp-server"
       ],
       "enabled": true
@@ -131,11 +135,7 @@ claude mcp add-json mysql-mcp-server '{
     "run",
     "--rm",
     "-i",
-    "-e", "MYSQL_HOST=localhost",
-    "-e", "MYSQL_PORT=3306",
-    "-e", "MYSQL_DB=mysql",
-    "-e", "MYSQL_USER=root",
-    "-e", "MYSQL_PASSWORD=password",
+    "--env-file", "/path/to/your/.env",
     "mysql-mcp-server"
   ]
 }'
@@ -159,13 +159,42 @@ Once connected, you can interact with your MySQL database using natural language
 
 - **Execute custom SQL**:
   > "Run this SQL query: SELECT department, AVG(salary) FROM employees GROUP BY department"
+  
+- **IN Operations**:
+  > "Find all users with these email addresses: user1@example.com, user2@example.com, user3@example.com"
+
+## 🔍 Working with IN Operations
+
+The server provides special handling for SQL `IN` operations with lists. You can use either of these approaches:
+
+### Approach 1: Expanded Placeholders (Traditional)
+
+```sql
+-- Each value needs its own placeholder
+SELECT * FROM users WHERE email IN (%s, %s, %s)
+```
+
+With parameters: `["user1@example.com", "user2@example.com", "user3@example.com"]`
+
+### Approach 2: List Parameter (Simplified)
+
+```sql
+-- Single placeholder for the entire list
+SELECT * FROM users WHERE email IN (%s)
+```
+
+With parameters: `[["user1@example.com", "user2@example.com", "user3@example.com"]]` (nested list)
+
+The server will automatically detect and expand the list parameter into the correct number of placeholders.
 
 ## 🧰 Available Tools
 
-The MySQL MCP server provides four powerful tools:
+The MySQL MCP server provides several powerful tools for different SQL operations:
 
-### 1. mysql_execute_query
-Execute any SQL query on the MySQL database.
+### 1. Query Execution Tools
+
+#### mysql_execute_query
+Execute any SQL query on the MySQL database with automatic operation type detection.
 
 **Parameters**:
 - `query` (required): The SQL query to execute
@@ -176,28 +205,69 @@ Execute any SQL query on the MySQL database.
 SELECT * FROM orders WHERE order_date > '2024-01-01' LIMIT 10
 ```
 
-### 2. mysql_list_tables
+#### mysql_select
+Execute SELECT queries only (for read-only operations).
+
+**Parameters**:
+- `query` (required): The SELECT query to execute
+- `params` (optional): Array of parameters for parameterized queries
+
+**Example**:
+```sql
+SELECT * FROM users WHERE age > 25
+```
+
+#### mysql_insert
+Execute INSERT queries only (when explicitly enabled).
+
+**Parameters**:
+- `query` (required): The INSERT query to execute
+- `params` (optional): Array of parameters for parameterized queries
+
+**Example**:
+```sql
+INSERT INTO customers (name, email) VALUES (%s, %s)
+```
+
+#### mysql_update
+Execute UPDATE queries only (when explicitly enabled).
+
+**Parameters**:
+- `query` (required): The UPDATE query to execute
+- `params` (optional): Array of parameters for parameterized queries
+
+**Example**:
+```sql
+UPDATE products SET price = price * 0.9 WHERE category = 'electronics'
+```
+
+#### mysql_delete
+Execute DELETE queries only (when explicitly enabled).
+
+**Parameters**:
+- `query` (required): The DELETE query to execute
+- `params` (optional): Array of parameters for parameterized queries
+
+**Example**:
+```sql
+DELETE FROM orders WHERE status = 'cancelled' AND created_at < '2023-01-01'
+```
+
+### 2. Helper Tools
+
+#### mysql_list_tables
 List all tables in a database.
 
 **Parameters**:
 - `database` (optional): Database name (defaults to the current database)
 
-### 3. mysql_describe_table
+#### mysql_describe_table
 Get the structure of a specific table.
 
 **Parameters**:
 - `table_name` (required): Name of the table to describe
 - `database` (optional): Database name (defaults to the current database)
 
-### 4. mysql_get_table_data
-Get data from a specific table with filtering and sorting options.
-
-**Parameters**:
-- `table_name` (required): Name of the table to query
-- `limit` (optional, default: 100): Maximum number of rows to return
-- `database` (optional): Database name (defaults to the current database)
-- `where_clause` (optional): Filtering condition (without the 'WHERE' keyword)
-- `order_by` (optional): Sorting specification (without the 'ORDER BY' keywords)
 
 ## 📝 Implementation Notes
 
@@ -211,9 +281,35 @@ This server uses the `FastMCP` framework from the MCP Python SDK, which provides
 ## 🔒 Security Considerations
 
 - **Credentials Security**: The server uses environment variables for database credentials. For production environments, consider using more secure methods for credential management.
-- **Query Access**: By default, this server allows execution of any SQL query. Consider adding constraints or validation to prevent risky operations.
+- **Operation Control**: By default, only SELECT operations are enabled. INSERT, UPDATE, and DELETE operations are disabled for safety and must be explicitly enabled via environment variables.
 - **Data Privacy**: The Docker container does not persist any data from your database, but be mindful of what data you allow Claude to access.
 - **Limited Permissions**: Use a database user with read-only access or only the permissions required for your use case.
+
+### Controlling Operation Types
+
+The server provides fine-grained control over which SQL operation types are allowed:
+
+| Environment Variable | Default | Description |
+|----------------------|---------|-------------|
+| `MYSQL_ENABLE_SELECT` | `true` | Controls whether SELECT queries are allowed |
+| `MYSQL_ENABLE_INSERT` | `false` | Controls whether INSERT queries are allowed |
+| `MYSQL_ENABLE_UPDATE` | `false` | Controls whether UPDATE queries are allowed |
+| `MYSQL_ENABLE_DELETE` | `false` | Controls whether DELETE queries are allowed |
+
+Example of starting the Docker container with an .env file:
+
+```bash
+# Run with environment variables from .env file
+docker run --rm -i --env-file .env mysql-mcp-server
+
+# Alternatively, override specific variables
+docker run --rm -i \
+  -e MYSQL_HOST=localhost \
+  -e MYSQL_USER=root \
+  -e MYSQL_PASSWORD=password \
+  -e MYSQL_ENABLE_INSERT=true \
+  mysql-mcp-server
+```
 
 ## 🔍 Troubleshooting
 
@@ -249,5 +345,5 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 <div align="center">
-Made with ❤️ for the Claude community
+Made with ❤️ for the Ali + Claude Code
 </div>
